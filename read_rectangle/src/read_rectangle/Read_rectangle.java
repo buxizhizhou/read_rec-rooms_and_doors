@@ -2,6 +2,7 @@
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  * 在CAD中在单独图层画矩形以切分房间，这里读取该图层中的矩形。
+ * 加入了git版本控制
  */
 package read_rectangle;
 
@@ -11,6 +12,8 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -25,6 +28,8 @@ public class Read_rectangle {
     public static double tmaxy=-100000000000000000.0;
     
     public static List<Rect> allrec=new ArrayList();//所有的矩形集合
+    public static List<Line> alllns=new ArrayList();//所有门线的集合
+    public static List<Guanxi> allgx=new ArrayList();//所有“点、矩形”对的集合
     
     public static Rect readLWpolyline_rec(BufferedReader bfr,String tuc) throws IOException, InstantiationException, IllegalAccessException{
              
@@ -113,17 +118,152 @@ public class Read_rectangle {
       }//while  
     }
     
+    public static Line readLine_dr(BufferedReader bfr,String dtuc) throws InstantiationException, IllegalAccessException, IOException{
+           //这里假设坐标是按照xyz的顺序给出的，若要与顺序无关，可以把下面程序改成在while循环里一直读，然后循环里做判断。
+           double x1=0,x2=0,y1=0,y2=0,z1=0,z2=0;
+           String s1=null,s2=null;
+           while((s1=bfr.readLine())!=null && (s2=bfr.readLine())!=null && s1.equals("  8")==false);  //图层
+           String tc=new String(s2);
+           if(tc.equals("dtuc")) return null;//如果不是门图层的，则返回null
+           //获取点坐标
+           while((s1=bfr.readLine())!=null && (s2=bfr.readLine())!=null && s1.equals(" 10")==false);  //x坐标
+           x1=Double.parseDouble(s2);
+           while((s1=bfr.readLine())!=null && (s2=bfr.readLine())!=null && s1.equals(" 20")==false);
+           y1=Double.valueOf(s2).doubleValue();
+           while((s1=bfr.readLine())!=null && (s2=bfr.readLine())!=null && s1.equals(" 30")==false);
+           z1=Double.valueOf(s2).doubleValue();
+           
+           while((s1=bfr.readLine())!=null && (s2=bfr.readLine())!=null && s1.equals(" 11")==false);  //x坐标
+           x2=Double.valueOf(s2).doubleValue();   
+           while((s1=bfr.readLine())!=null && (s2=bfr.readLine())!=null && s1.equals(" 21")==false);
+           y2=Double.valueOf(s2).doubleValue();
+           while((s1=bfr.readLine())!=null && (s2=bfr.readLine())!=null && s1.equals(" 31")==false);
+           z2=Double.valueOf(s2).doubleValue();
+           
+           Line l1=new Line(x1,y1,x2,y2);
+           
+           return l1;
+    }
+    
+    public static void readDoor(BufferedReader bfr, String dtuc) throws IOException, InstantiationException, IllegalAccessException
+    {
+      String s1=null,s2=null;
+      int flag=0;//指示所读是否为ENTITIES段，1为是，0为否。
+      while((s1 = bfr.readLine())!=null && (s2 = bfr.readLine())!=null){ //&& s2.equals("ENDSEC")==false){
+         if(s1.equals("  0") && s2.equals("SECTION")){
+            s1=bfr.readLine();
+            s2=bfr.readLine();
+            if(s1.equals("  2") && s2.equals("ENTITIES")) { flag=1; System.out.println("begin in Entities");continue; }   //开始读ENTITIES段
+         }
+         if(flag==0) continue;    //所读内容不是ENTITIES段
+         if(flag==1 && s1.equals("  0") && s2.equals("ENDSEC")) { flag=0; System.out.println("end of Entities"); break; }  //读完ENTITIES段
+         if(s1.equals("  0")){//不判断s1直接判断s2是不对的。
+           if(s2.equals("LINE")){//线段
+             Line ln=readLine_dr(bfr,dtuc);
+             if(ln!=null){
+               alllns.add(ln);
+             }
+          }//ifs2
+         }//ifs1
+      }//while  
+    }
+    
+    public static void compute_pairs()
+    {
+      int recflag[]=new int[allrec.size()];//标志相应的rec是否已被门找到
+      for(int i=0;i<allrec.size();++i)
+          recflag[i]=0;
+        
+      for(int i=0;i<alllns.size();++i)
+      {//对每一条线
+        Line ln=alllns.get(i);
+        Point qd=ln.qd;
+        Point zd=ln.zd;
+        int qreck=find_rec(qd,recflag);
+        int zreck=find_rec(zd,recflag);
+        Point jd=compute_jd(qd,zd,qreck);
+        Guanxi gx=new Guanxi(jd,qreck,zreck);
+        allgx.add(gx);
+      }
+    }
+    
+    public static Point compute_jd(Point qd,Point zd,int qrec)
+    {
+      double px=0,py=0;
+      Rect rec=allrec.get(qrec);
+      if(zd.x>=rec.xz && zd.x<=rec.xy)//两个房间是上下关系
+      {
+        px=(qd.x+zd.x)/2;
+        if(zd.y<=rec.yz) py=rec.yz;//终点矩形在起点矩形下方
+        else py=rec.yy;//终点矩形在起点矩形上方
+      }
+      else//左右关系
+      {
+        py=(qd.y+zd.y)/2;
+        if(zd.x<=rec.xz) px=rec.xz;//终点矩形在起点矩形的左边
+        else px=rec.xy;//终点矩形在起点矩形右边
+      }
+      return new Point(px,py);
+    }
+    
+    public static int find_rec(Point pt,int recflag[])//由一个点，去找包含它的矩形，返回矩形在allrec中的下标
+    {
+      boolean flag=false;//是否找到矩形
+      int k=0;
+      
+      for(int i=0;i<allrec.size();++i)
+      {
+        if(recflag[i]==1) continue;
+        
+        Rect rec=allrec.get(i);
+        if(pt.x>=rec.xz && pt.x<=rec.xy)
+        {
+          if(pt.y>=rec.yz && pt.y<=rec.yy) { flag=true; k=i;break;}//找到了
+        }
+      }
+      
+      if(flag==false) System.out.println("门的点没找到矩形！！！"); 
+      return k;
+    }
+    
     public static void main(String[] args) throws FileNotFoundException, IOException, InstantiationException, IllegalAccessException {
         /*String fileName="E:\\cad-xx\\test-color-num.dxf";
         String tuc="rec";*/
         
         String fileName="E:\\cad-xx\\hospital-fengceng\\rec\\hospital_floor3-8b.dxf";
-        String tuc="rec";
+        String rectuc="rec";
+        String doortuc="doorpoint";
         
         File file=new File(fileName);
         FileReader fr=new FileReader(file);
         BufferedReader bfr= new BufferedReader(fr);
-        readRectangle(bfr,tuc);
-    }
+        readRectangle(bfr,rectuc);
+        bfr.close();
+        fr.close();
+        
+        //为保持模块独立，重新读取该文件，而不是和上面矩形一起读
+        File file2=new File(fileName);
+        FileReader fr2=new FileReader(file2);
+        BufferedReader bfr2= new BufferedReader(fr2);
+        readDoor(bfr2,doortuc);
+        bfr2.close();
+        fr2.close();
+        
+        final double pc=10;
+        Collections.sort(allrec, new Comparator<Rect>() {
+            public int compare(Rect arg0, Rect arg1) {
+                if(Math.abs(arg0.yy-arg1.yy)<pc){
+                  if(arg0.yy<arg1.yy) return -1;
+                  else return 1;
+                }
+                //否则，说明两者yy相同
+                if(arg0.xy<arg1.xy) return -1;
+                else return 1;
+            }
+          });
+        
+        compute_pairs();
+        
+    }//main
     
 }
