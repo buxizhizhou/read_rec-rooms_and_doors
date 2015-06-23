@@ -1,0 +1,3 @@
+read_rectangle.Rect
+read_rectangle.rect
+read_rectangle.leixing
