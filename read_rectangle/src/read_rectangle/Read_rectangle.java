@@ -7,9 +7,11 @@
 package read_rectangle;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -264,6 +266,38 @@ public class Read_rectangle {
         
         compute_pairs();
         
+        save_to_file();
+        
     }//main
+    
+    public static void save_to_file() throws IOException
+    {
+      //保存矩形编号和坐标
+      File file=new File("xx_rects.txt"); 
+      FileWriter fw=new FileWriter(file);
+      BufferedWriter bfw=new BufferedWriter(fw);
+      for(int i=0;i<allrec.size();++i)
+      {
+        Rect rec=allrec.get(i);
+        bfw.write((i+1)+","+rec.xz+","+rec.yz+","+rec.xy+","+rec.yy+","+rec.type);
+        bfw.newLine();
+      }
+      bfw.close();
+      fw.close();
+      
+      //保存连接关系
+      File file2=new File("xx_relations.txt"); 
+      FileWriter fw2=new FileWriter(file2);
+      BufferedWriter bfw2=new BufferedWriter(fw2);
+      for(int i=0;i<allgx.size();++i)
+      {
+        Guanxi gx=allgx.get(i);
+        Point jd=gx.pt;
+        bfw2.write((i+1)+","+jd.x+","+jd.y+","+(gx.frec+1)+","+(gx.srec+1));
+        bfw2.newLine();
+      }
+      bfw2.close();
+      fw2.close();
+    }
     
 }
