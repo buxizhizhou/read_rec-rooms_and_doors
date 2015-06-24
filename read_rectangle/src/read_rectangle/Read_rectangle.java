@@ -126,7 +126,7 @@ public class Read_rectangle {
            String s1=null,s2=null;
            while((s1=bfr.readLine())!=null && (s2=bfr.readLine())!=null && s1.equals("  8")==false);  //图层
            String tc=new String(s2);
-           if(tc.equals("dtuc")) return null;//如果不是门图层的，则返回null
+           if(tc.equals(dtuc)==false) return null;//如果不是门图层的，则返回null
            //获取点坐标
            while((s1=bfr.readLine())!=null && (s2=bfr.readLine())!=null && s1.equals(" 10")==false);  //x坐标
            x1=Double.parseDouble(s2);
@@ -170,53 +170,76 @@ public class Read_rectangle {
       }//while  
     }
     
-    public static void compute_pairs()
+    public static void compute_pairs(boolean fg)
     {
-      int recflag[]=new int[allrec.size()];//标志相应的rec是否已被门找到
-      for(int i=0;i<allrec.size();++i)
-          recflag[i]=0;
-        
+ 
       for(int i=0;i<alllns.size();++i)
       {//对每一条线
         Line ln=alllns.get(i);
         Point qd=ln.qd;
         Point zd=ln.zd;
-        int qreck=find_rec(qd,recflag);
-        int zreck=find_rec(zd,recflag);
-        Point jd=compute_jd(qd,zd,qreck);
+        int qreck=find_rec(qd);
+        int zreck=find_rec(zd);
+        if(qreck<0 && zreck<0)
+        {
+          System.out.println("PLINE "+qd.x+","+qd.y+" "+zd.x+","+zd.y+" ");
+          System.out.println("门连接的两个房间都是-2！！！");
+        }
+        int reck=qreck>=0?qreck:zreck;//reck标记的是qreck和zreck中不为-1的一个。
+        Point jd=compute_jd(qd,zd,reck,qreck);
         Guanxi gx=new Guanxi(jd,qreck,zreck);
         allgx.add(gx);
+        
+        //if(qreck>=0) recflag[qreck]=1;
+        //if(zreck>=0) recflag[zreck]=1;
       }
     }
     
-    public static Point compute_jd(Point qd,Point zd,int qrec)
+    public static Point compute_jd(Point qd,Point zd,int reck,int qreck)
     {
       double px=0,py=0;
-      Rect rec=allrec.get(qrec);
-      if(zd.x>=rec.xz && zd.x<=rec.xy)//两个房间是上下关系
+      Rect rec=allrec.get(reck);
+      if(reck==qreck)//传进来的非-1房间是起点房间
       {
-        px=(qd.x+zd.x)/2;
-        if(zd.y<=rec.yz) py=rec.yz;//终点矩形在起点矩形下方
-        else py=rec.yy;//终点矩形在起点矩形上方
+        if(zd.x>=rec.xz && zd.x<=rec.xy)//两个房间是上下关系
+        {
+          px=(qd.x+zd.x)/2;
+          if(zd.y<=rec.yz) py=rec.yz;//终点矩形在起点矩形下方
+          else py=rec.yy;//终点矩形在起点矩形上方
+        }
+        else//左右关系
+        {
+         py=(qd.y+zd.y)/2;
+         if(zd.x<=rec.xz) px=rec.xz;//终点矩形在起点矩形的左边
+         else px=rec.xy;//终点矩形在起点矩形右边
+        }
       }
-      else//左右关系
+      else//传的是终点房间
       {
-        py=(qd.y+zd.y)/2;
-        if(zd.x<=rec.xz) px=rec.xz;//终点矩形在起点矩形的左边
-        else px=rec.xy;//终点矩形在起点矩形右边
+        if(qd.x>=rec.xz && qd.x<=rec.xy)//两个房间是上下关系
+        {
+          px=(qd.x+zd.x)/2;
+          if(qd.y<=rec.yz) py=rec.yz;//终点矩形在起点矩形下方
+          else py=rec.yy;//终点矩形在起点矩形上方
+        }
+        else//左右关系
+        {
+         py=(qd.y+zd.y)/2;
+         if(qd.x<=rec.xz) px=rec.xz;//终点矩形在起点矩形的左边
+         else px=rec.xy;//终点矩形在起点矩形右边
+        }
       }
+      
       return new Point(px,py);
     }
     
-    public static int find_rec(Point pt,int recflag[])//由一个点，去找包含它的矩形，返回矩形在allrec中的下标
+    public static int find_rec(Point pt)//由一个点，去找包含它的矩形，返回矩形在allrec中的下标;找不到就返回-2。（后面在保存到文件里时有个+1，-2即成为-1）
     {
       boolean flag=false;//是否找到矩形
-      int k=0;
+      int k=-2;
       
       for(int i=0;i<allrec.size();++i)
       {
-        if(recflag[i]==1) continue;
-        
         Rect rec=allrec.get(i);
         if(pt.x>=rec.xz && pt.x<=rec.xy)
         {
@@ -224,7 +247,11 @@ public class Read_rectangle {
         }
       }
       
-      if(flag==false) System.out.println("门的点没找到矩形！！！"); 
+      if(flag==false)
+      {
+        System.out.println("门的点没找到矩形！！！");
+        System.out.println(pt.x+","+pt.y);
+      }
       return k;
     }
     
@@ -232,14 +259,22 @@ public class Read_rectangle {
         /*String fileName="E:\\cad-xx\\test-color-num.dxf";
         String tuc="rec";*/
         
-        String fileName="E:\\cad-xx\\hospital-fengceng\\rec\\hospital_floor3-8b.dxf";
+        /*String fileName="E:\\cad-xx\\hospital-fengceng\\rec\\hospital_floor3-8b.dxf";
+        String rectuc="rec";
+        String doortuc="doorpoint";*/
+        
+        /*String fileName="E:\\cad-xx\\hospital-fengceng\\rec\\second-rec-dr.dxf";
+        String rectuc="rec";
+        String doortuc="doorpoint";*/
+        
+        String fileName="E:\\cad-xx\\hospital-fengceng\\rec\\ground-rec-dr.dxf";
         String rectuc="rec";
         String doortuc="doorpoint";
         
         File file=new File(fileName);
         FileReader fr=new FileReader(file);
         BufferedReader bfr= new BufferedReader(fr);
-        readRectangle(bfr,rectuc);
+        readRectangle(bfr,rectuc);//读得所有的矩形到allrec
         bfr.close();
         fr.close();
         
@@ -247,7 +282,7 @@ public class Read_rectangle {
         File file2=new File(fileName);
         FileReader fr2=new FileReader(file2);
         BufferedReader bfr2= new BufferedReader(fr2);
-        readDoor(bfr2,doortuc);
+        readDoor(bfr2,doortuc);//读得所有的门线到alllns
         bfr2.close();
         fr2.close();
         
@@ -264,7 +299,9 @@ public class Read_rectangle {
             }
           });
         
-        compute_pairs();
+        boolean flag=false;//标记是否是第一层，第一层的话，如果门没有连接两个房间，则另一个连接的是标号为-1的室外
+        //flag=true;
+        compute_pairs(flag);
         
         save_to_file();
         
@@ -272,8 +309,13 @@ public class Read_rectangle {
     
     public static void save_to_file() throws IOException
     {
+      /*File file=new File("hospital2-xx_rects.txt");   
+      File file2=new File("hospital2-xx_relations.txt");*/  
+      
+      File file=new File("hospital1-xx_rects.txt");   
+      File file2=new File("hospital1-xx_relations.txt"); 
+        
       //保存矩形编号和坐标
-      File file=new File("xx_rects.txt"); 
       FileWriter fw=new FileWriter(file);
       BufferedWriter bfw=new BufferedWriter(fw);
       for(int i=0;i<allrec.size();++i)
@@ -286,7 +328,6 @@ public class Read_rectangle {
       fw.close();
       
       //保存连接关系
-      File file2=new File("xx_relations.txt"); 
       FileWriter fw2=new FileWriter(file2);
       BufferedWriter bfw2=new BufferedWriter(fw2);
       for(int i=0;i<allgx.size();++i)
